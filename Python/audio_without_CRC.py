@@ -15,7 +15,7 @@ def crc8(buf):
                 crc <<= 1
     return crc
 
-ser = serial.Serial('COM12', 115200)  # 根据实际串口配置修改
+ser = serial.Serial('COM14', 115200)  # 根据实际串口配置修改
 
 # 配置WAV文件
 channels = 1  # 单声道
@@ -51,43 +51,7 @@ time.sleep(0.1)
 ser.close()
 
 wave_file.writeframes(Data)
+
 # 关闭WAV文件和串口
 wave_file.close()
 print('Finished')
-
-# file = open('output.txt', 'w')
-# print(Data.hex(), file=file)
-# file.close()
-
-# ser.write(ed_signal)
-# time.sleep(0.1)
-# ser.write(st_signal)
-# time.sleep(0.1)
-# ser.close()
-
-# #read txt method one
-# with open("output.txt", "r") as f:  # 打开文件
-#     Data_string = f.read()  # 读取文件
-
-# Data_match = re.findall(r'ab.*?ef', Data_string)
-# Data_bytes = b''
-# for data_ma in Data_match:
-#     if(len(data_ma) != 10):
-#         print("数据长度不正确")
-#     else:
-#         data = bytes.fromhex(data_ma[2:6])
-#         result = crc8(data)
-#         if(data_ma[6:8] == '{:02X}'.format(result).lower()):
-#             Data_bytes = Data_bytes + data
-#         else:
-#             print("CRC 校验失败")
-
-# wave_file.writeframes(Data_bytes)
-
-# file = open('data_byte.txt', 'w')
-# print(Data_bytes.hex(), file=file)
-# file.close()
-
-# # 关闭WAV文件和串口
-# wave_file.close()
-# print('Finished')

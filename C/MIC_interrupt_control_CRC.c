@@ -172,7 +172,7 @@ interrupt void  ISRMcbspSend(void)
 	sdata[3]=crc;
 	sdata[4]=BAOWEI;
 	Uint16 cnt;
-	for( cnt=0;cnt<5;cnt++)
+	for(cnt=0;cnt<5;cnt++)
 	{
 		scib_xmit(sdata[cnt]);
 	}
