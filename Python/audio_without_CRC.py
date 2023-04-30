@@ -1,19 +1,6 @@
 import serial
 import wave
 import time
-import re
-
-def crc8(buf):
-    buf = bytes.fromhex(buf.hex()) # add this line
-    crc = 0
-    for b in buf:
-        crc ^= b
-        for _ in range(8):
-            if crc & 0x80:
-                crc = ((crc << 1) ^ 0x07) & 0xFF
-            else:
-                crc <<= 1
-    return crc
 
 ser = serial.Serial('COM14', 115200)  # 根据实际串口配置修改
 
@@ -43,6 +30,9 @@ while True:
         break
     data = ser.read(ser.inWaiting())
     Data = Data + data
+
+with open('origin_data.txt', 'w') as file:
+    print(Data, file=file)
 
 ser.write(ed_signal)
 time.sleep(0.1)
