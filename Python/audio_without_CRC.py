@@ -26,7 +26,7 @@ start = time.time()
 # 读取并写入数据
 while True:
     end = time.time()
-    if end - start > 2:
+    if end - start > 5:
         break
     data = ser.read(ser.inWaiting())
     Data = Data + data

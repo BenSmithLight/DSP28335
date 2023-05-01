@@ -67,6 +67,6 @@ with wave.open('test.wav', 'wb') as wave_file:
     wave_file.setframerate(frame_rate)
     # 将整数列表转换为二进制数据，每个整数占两个字节，使用小端字节序
     data = struct.pack('<' + 'h' * len(data), *data)
-    wave_file.writeframes(data)
+    wave_file.writeframes(data[1:])
 
 print('Finished')
