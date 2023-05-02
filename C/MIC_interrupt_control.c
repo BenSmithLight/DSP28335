@@ -65,11 +65,11 @@ void main(void)
     Delay(100);
     AIC23Write(0x02, 0x00);
     Delay(100);
-    AIC23Write(0x04, 0x7f);
+    AIC23Write(0x04, 0x60);
     Delay(100);
-    AIC23Write(0x06, 0x7f);
+    AIC23Write(0x06, 0x60);
     Delay(100);
-    AIC23Write(0x08, 0x14);
+    AIC23Write(0x08, 0xF5);
     Delay(100);
     AIC23Write(0x0A, 0x00);
     Delay(100);
@@ -348,6 +348,8 @@ __interrupt void scibRxFifoIsr(void)
     {
         PieCtrlRegs.PIEIER6.bit.INTx5 = 0; // Enable PIE Group 6, INT 5
     }
+    else
+    	;
 //    msg = "\n\nDSP Receive: ";
 //    scib_msg(msg);
 //    scib_msg(rdataB);

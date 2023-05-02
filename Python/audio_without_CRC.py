@@ -8,7 +8,7 @@ ser = serial.Serial('COM14', 115200)  # 根据实际串口配置修改
 channels = 1  # 单声道
 sample_width = 2  # 采样宽度为2字节
 frame_rate = 5715.124 # 采样率为44100Hz
-wave_file = wave.open('test.wav', 'wb')
+wave_file = wave.open('output.wav', 'wb')
 wave_file.setnchannels(channels)
 wave_file.setsampwidth(sample_width)
 wave_file.setframerate(frame_rate)
@@ -31,7 +31,7 @@ while True:
     data = ser.read(ser.inWaiting())
     Data = Data + data
 
-with open('origin_data.txt', 'w') as file:
+with open('output.txt', 'w') as file:
     print(Data.hex(), file=file)
 
 ser.write(ed_signal)

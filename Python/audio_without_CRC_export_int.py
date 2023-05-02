@@ -61,7 +61,7 @@ data = b''.join(data)
 #     data = list(map(int, file.read().split()))
 
 # 使用with语句打开WAV文件，并设置参数和写入音频数据
-with wave.open('test.wav', 'wb') as wave_file:
+with wave.open('output.wav', 'wb') as wave_file:
     wave_file.setnchannels(channels)
     wave_file.setsampwidth(sample_width)
     wave_file.setframerate(frame_rate)
