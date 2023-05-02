@@ -2,8 +2,7 @@ import serial
 import time
 import re
 import binascii
-from scipy.io.wavfile import write
-import numpy as np
+import wave
 
 def crc8(buf):
     buf = bytes.fromhex(buf.hex()) # add this line
@@ -16,6 +15,15 @@ def crc8(buf):
             else:
                 crc <<= 1
     return crc
+
+# 配置WAV文件
+channels = 1  # 单声道
+sample_width = 2  # 采样宽度为2字节
+frame_rate = 2280 # 采样率为44100Hz
+wave_file = wave.open('output.wav', 'wb')
+wave_file.setnchannels(channels)
+wave_file.setsampwidth(sample_width)
+wave_file.setframerate(frame_rate)
 
 ser = serial.Serial('COM14', 115200)  # 根据实际串口配置修改
 
@@ -68,17 +76,20 @@ file = open('data_byte.txt', 'w')
 print(Data_bytes.hex(), file=file)
 file.close()
 
-# 从 txt 文件中读取数据并转为 bytes 类型
-with open('data_byte.txt', 'r') as f:
-    data_str = f.read()
+with open('data_byte.txt', 'r') as file:
+    hex_str = file.read()
+
+hex_str = hex_str[2:-2]
 
 # 检查数据的长度，如果是奇数则补0或删除最后一个字符
-if len(data_str) % 2 != 0:
-    data_str = data_str[:-1] # 或者 hex_data = hex_data[:-1]
+if len(hex_str) % 2 != 0:
+    hex_str = hex_str[:-1] # 或者 hex_data = hex_data[:-1]
 
-data_str = data_str[2:-2]
+byte_data = binascii.unhexlify(hex_str)
 
-data_bytes = binascii.unhexlify(data_str)
-data_array = np.frombuffer(data_bytes, dtype=np.int16)
+# 将文件写入wav文件中
+wave_file.writeframes(byte_data)
 
-write('output.wav', 2280, data_array)
+# 关闭WAV文件和串口
+wave_file.close()
+print('Finished')
