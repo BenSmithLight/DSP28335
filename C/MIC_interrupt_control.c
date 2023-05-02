@@ -1,364 +1,330 @@
 /*
- * 			广州创龙电子科技有限公司
- *
- * Copyright 2015 Tronlong All rights reserved
- */
-
-/*
  * 功能描述：
- *     本例程将从Mic In接口输入的音频数据送到Line Out接口播放
+ *      本程序可以完成数据的采集与传输
  *
  */
 
-#include "DSP2833x_Device.h"   // DSP2833x Headerfile Include File
-#include "DSP2833x_Examples.h" // DSP2833x Examples Include File
+// 包含所需的头文件
+#include "DSP2833x_Device.h"
+#include "DSP2833x_Examples.h"
 #include "DSP28x_Project.h"
 
 // 使用前，声明本文件中的相关函数；
-void I2CA_Init(void);
-Uint16 AIC23Write(int Address, int Data);
-void Delay(int time);
-void delay();
-interrupt void ISRMcbspSend();
-// 串口
-void scib_echoback_init(void);
-void scib_fifo_init(void);
-void scib_xmit(int a);
-void scib_msg(char *msg);
-__interrupt void scibRxFifoIsr(void);
-unsigned char crc8(unsigned char *buf, int len);
-//__interrupt void scibTxFifoIsr(void);
+void I2CA_Init(void);							 // I2C-A总线初始化函数声明
+Uint16 AIC23Write(int Address, int Data);		 // AIC23音频编解码器寄存器写入函数声明
+void Delay(int time);							 // 延时函数声明
+interrupt void ISRMcbspSend();					 // McBSP中断服务函数声明
+void AIC23Init(void);							 // AI23音频解码器声明
+void scib_echoback_init(void);					 // 串口B初始化-回声模式
+void scib_fifo_init(void);						 // 串口B FIFO初始化
+void scib_xmit(int a);							 // 串口B发送数据
+void scib_msg(char *msg);						 // 串口B发送字符串
+__interrupt void scibRxFifoIsr(void);			 // 串口B接收中断服务函数
+unsigned char crc8(unsigned char *buf, int len); // CRC校验
 
-char sdata[5];  // Send data for SCI-B
-char rdataB[8]; // Received data for SCI-B
-char *msg;
-#define POLY 0x07 // 生成多项式
-int BAOTOU = 0xAB;
-int BAOWEI = 0xEF;
+// 定义全局变量
+char sdata[5];	   // 用于SCI-B发送数据
+char rdataB[8];	   // 用于SCI-B接收数据
+#define POLY 0x07  // CRC计算采用的多项式 POLY=0x07
+int BAOTOU = 0xAB; // 帧头字节
+int BAOWEI = 0xEF; // 帧尾字节
+#define START 0xFF // 开始标志
+#define STOP 0xFE  // 结束标志
 
+// 主函数
 void main(void)
 {
-    InitSysCtrl(); // 配置系统时钟
+	InitSysCtrl(); // 配置系统时钟
 
-    InitMcbspaGpio(); // zq
-    InitI2CGpio();
-    InitScibGpio();
+	InitMcbspaGpio(); // 初始化McBSP模块的GPIO口
+	InitI2CGpio();	  // 初始化 I2C 模块的GPIO口
+	InitScibGpio();	  // 初始化 SCI 模块的GPIO口
 
-    // Disable CPU interrupts
-    DINT;
+	// 禁用CPU中断
+	DINT;
 
-    InitPieCtrl();
+	InitPieCtrl(); //  初始化PIE控制器
 
-    // Disable CPU interrupts and clear all CPU interrupt flags:
-    IER = 0x0000;
-    IFR = 0x0000;
+	// 禁用所有CPU中断并清除所有中断标志位
+	IER = 0x0000;
+	IFR = 0x0000;
 
-    InitPieVectTable();
+	InitPieVectTable(); // 初始化 PIE 向量表
 
-    SCIStdioInit();
-    //   SCIPuts("\r\n ============Test Start===========.\r\n", -1);
-    //   SCIPuts("Welcome to TL28335 Audio Mic In Demo application.\r\n\r\n", -1);
+	SCIStdioInit(); // 配置SCI输出
 
-    I2CA_Init();
+	I2CA_Init(); // 初始化I2C模块
 
-    AIC23Write(0x00, 0x00);
-    Delay(100);
-    AIC23Write(0x02, 0x00);
-    Delay(100);
-    AIC23Write(0x04, 0x60);
-    Delay(100);
-    AIC23Write(0x06, 0x60);
-    Delay(100);
-    AIC23Write(0x08, 0xF5);
-    Delay(100);
-    AIC23Write(0x0A, 0x00);
-    Delay(100);
-    AIC23Write(0x0C, 0x00);
-    Delay(100);
-    AIC23Write(0x0E, 0x43);
-    Delay(100);
-    AIC23Write(0x10, 0x23);
-    Delay(100);
-    AIC23Write(0x12, 0x01);
-    Delay(100); // AIC23Init
+	AIC23Init(); // 初始化AI23音频解码器
 
-    InitMcbspa(); // Initalize the Mcbsp-A
+	InitMcbspa(); // 初始化McBSP模块
 
-    EALLOW; // This is needed to write to EALLOW protected registers
-    PieVectTable.MRINTA = &ISRMcbspSend;
-    PieVectTable.SCIRXINTB = &scibRxFifoIsr;
-    // PieVectTable.SCITXINTB = &scibTxFifoIsr;
-    EDIS;                 // This is needed to disable write to EALLOW protected registers
-                          // 串口初始化
-    scib_fifo_init();     // Initialize the SCI FIFO
-    scib_echoback_init(); // Initalize SCI for echoback
-    msg = "\r\nWelcome to TL28335 SCIB Demo application.\n\0";
-    scib_msg(msg);
+	EALLOW;									 // 写入受EALLOW保护的寄存器
+	PieVectTable.MRINTA = &ISRMcbspSend;	 // 配置MRINTA中断向量
+	PieVectTable.SCIRXINTB = &scibRxFifoIsr; // 配置SCIRXINTB中断向量
 
-    msg = "\r\nYou will enter a character, and the DSP will echo it back! \n\0";
-    scib_msg(msg);                       // 发送
-    ScibRegs.SCIFFRX.bit.RXFFOVRCLR = 1; // 清除标志位
+	EDIS; // 禁止写入受EALLOW保护的寄存器
+	// 串行通信接口（SCI）缓存区初始化
+	scib_fifo_init();	  // 初始化SCI FIFO
+	scib_echoback_init(); // 回送的SCI的初始化
 
-    Uint16 i;
-    for (i = 0; i < 5; i++)
-    {
-        sdata[i] = 0;
-    }
+	ScibRegs.SCIFFRX.bit.RXFFOVRCLR = 1; // 清除接收消息中的溢出标志
 
-    // 使能中断
-    PieCtrlRegs.PIECTRL.bit.ENPIE = 1; // Enable the PIE block
-    PieCtrlRegs.PIEIER9.bit.INTx3 = 1; // PIE Group 9, int1
-    PieCtrlRegs.PIEIER9.bit.INTx4 = 0; // PIE Group 9, INT2
-    IER |= M_INT9;                     // Enable CPU INT
+	Uint16 i;
+	for (i = 0; i < 5; i++) //  初始化sdata数组
+	{
+		sdata[i] = 0;
+	}
 
-    PieCtrlRegs.PIECTRL.bit.ENPIE = 1; // Enable the PIE block
-    PieCtrlRegs.PIEIER6.bit.INTx5 = 0; // Enable PIE Group 6, INT 5
-    IER |= M_INT6;                     // Enable CPU INT6
+	// PIE中断控制器配置
+	PieCtrlRegs.PIECTRL.bit.ENPIE = 1; // 启用PIE块
+	PieCtrlRegs.PIEIER9.bit.INTx3 = 1; // PIE Group 9, int1
+	PieCtrlRegs.PIEIER9.bit.INTx4 = 0; // PIE Group 9, INT2
+	IER |= M_INT9;					   // Enable CPU INT
 
-    EINT; // Enable Global interrupt INTM
-    ERTM; // Enable Global realtime interrupt DBGM
+	PieCtrlRegs.PIECTRL.bit.ENPIE = 1; // 启用PIE块
+	PieCtrlRegs.PIEIER6.bit.INTx5 = 0; // 启用PIE第6组，INT5
+	IER |= M_INT6;					   // 启用CPU INT6
 
-    while (1)
-    {
-    }
-} // end of main
+	EINT; // 启用全局中断INTM
 
+	EINT; // 启用全局中断
+	ERTM; // 启用全局实时中断
 
-// Test 1,SCIA  DLB, 8-bit word, baud rate 0x000F, default, 1 STOP bit, no parity
-void scib_echoback_init()
+	while (1) // 进入循环
+	{
+	}
+} // 主函数结束
+
+__interrupt void scibRxFifoIsr(void)
 {
-    // Note: Clocks were turned on to the Scib 外部
-    // in the InitSysCtrl() function
+	// while(ScibRegs.SCIFFRX.bit.RXFFST !=1)// wait for XRDY =1 for empty state
+	Uint16 i;
+	Uint16 flag_start = 0;
+	Uint16 flag_stop = 0;
+	for (i = 0; i < 8; i++)
+	{
+		rdataB[i] = ScibRegs.SCIRXBUF.all; // 读取串口接收缓冲寄存器中的值
+		if (rdataB[i] == START)
+		{
+			flag_start++;
+		}
+		else if (rdataB[i] == STOP)
+		{
+			flag_stop++;
+		}
+	}
+	if (flag_start > 5) // 判断接收到大于5次开始命令
+	{
+		PieCtrlRegs.PIEIER6.bit.INTx5 = 1; // 使能McBSP中断
+	}
+	else if (flag_stop > 5) // 判断接收到大于5次结束命令
+	{
+		PieCtrlRegs.PIEIER6.bit.INTx5 = 0; // 失能McBSP中断
+	}
+	else
+		;
+	ScibRegs.SCIFFRX.bit.RXFFINTCLR = 1; // 清除中断标志
 
-    ScibRegs.SCICCR.all = 0x0007;  // 1 stop bit,  No loopback
-                                   // No parity,8 char bits,
-                                   // async mode, idle-line protocol
-    ScibRegs.SCICTL1.all = 0x0003; // enable TX, RX, internal SCICLK,
-                                   // Disable RX ERR, SLEEP, TXWAKE
-    ScibRegs.SCICTL2.all = 0x0003;
-    ScibRegs.SCICTL2.bit.TXINTENA = 1;
-    ScibRegs.SCICTL2.bit.RXBKINTENA = 1;
-#if (CPU_FRQ_150MHZ)
-    ScibRegs.SCIHBAUD = 0x0000; // 115200 baud @LSPCLK = 37.5MHz.（37500000/（8*115200）-1）
-    ScibRegs.SCILBAUD = 0x0028;
-#endif
-#if (CPU_FRQ_100MHZ)
-    ScibRegs.SCIHBAUD = 0x0000; // 115200 baud @LSPCLK = 20MHz.
-    ScibRegs.SCILBAUD = 0x0015;
-#endif
-    ScibRegs.SCICTL1.all = 0x0023; // Relinquish SCI from Reset
+	PieCtrlRegs.PIEACK.all |= 0x100; // 清除外部中断信号标志，并确认该中断已经被处理
 }
 
-// Transmit a character from the SCI
+// 定义McBSP发送时钟中断服务函数
+interrupt void ISRMcbspSend(void)
+{
+	EINT;
+	int temp1; // 定义临时变量
+
+	temp1 = McbspaRegs.DRR1.all; // 从接收寄存器中读取数据
+
+	McbspaRegs.DXR1.all = temp1; // 音频输出，写入传输寄存器
+
+	scib_xmit(temp1 >> 8); // 串口B向PC发送数据高8位
+	scib_xmit(temp1);	   // 串口B向PC发送数据低8位
+
+	PieCtrlRegs.PIEACK.all = 0x0020; // 清除McBSP发送中断标志位
+}
+
+// Test 1,SCIA  DLB,8位数据位, 波特率0x000F, 默认设置，1个停止位，无奇偶校验
+void scib_echoback_init()
+{
+	// 注：时钟在InitSysCtrl()函数中已经开启到Scib外设上。
+
+	ScibRegs.SCICCR.all = 0x0007; // 1个停止位，不使用回环模式
+								  // 不使用奇偶校验，8个字符位，
+								  // 异步模式，空闲线协议
+	// 使能TX、RX、内部SCICLK，禁用RX ERR、SLEEP、TXWAKE
+	ScibRegs.SCICTL1.all = 0x0003;
+	ScibRegs.SCICTL2.all = 0x0003;
+	ScibRegs.SCICTL2.bit.TXINTENA = 1;
+	ScibRegs.SCICTL2.bit.RXBKINTENA = 1;
+
+// 设置波特率
+#if (CPU_FRQ_150MHZ)
+	ScibRegs.SCIHBAUD = 0x0000; // 115200 baud @LSPCLK = 37.5MHz.（37500000/（8*115200）-1）
+	ScibRegs.SCILBAUD = 0x0028;
+#endif
+#if (CPU_FRQ_100MHZ)
+	ScibRegs.SCIHBAUD = 0x0000; // 115200 baud @LSPCLK = 20MHz.
+	ScibRegs.SCILBAUD = 0x0015;
+#endif
+	ScibRegs.SCICTL1.all = 0x0023; // 取消SCI复位状态
+}
+
+// 初始化AI23音频解码器
+void AIC23Init(void)
+{
+	AIC23Write(0x00, 0x00); // 左声道麦克风输入音量控制:音量设置为-35dB
+	Delay(100);
+	AIC23Write(0x02, 0x00); // 右声道麦克风输入音量控制:音量设置为-35dB
+	Delay(100);
+	AIC23Write(0x04, 0x60); // 左声道耳机输出音量控制:音量设置为-25dB
+	Delay(100);
+	AIC23Write(0x06, 0x60); // 右声道耳机输出音量控制:音量设置为-25dB
+	Delay(100);
+	AIC23Write(0x08, 0xF5); // 模拟音频路径控制:侧音衰减开，设置为-15dB;mic增强为20dB
+	Delay(100);
+	AIC23Write(0x0A, 0x00); // 数字音频路径控制 全关
+	Delay(100);
+	AIC23Write(0x0C, 0x00); // 断电控制 全开
+	Delay(100);
+	AIC23Write(0x0E, 0x43); // 数字音频接口格式：主模式；DSP格式；输入为16位
+	Delay(100);
+	AIC23Write(0x10, 0x23); // 采样率控制：采样率为44.1kHz
+	Delay(100);
+	AIC23Write(0x12, 0x01); // 数字接口激活:激活
+	Delay(100);
+}
+
 // 发送字节函数
 void scib_xmit(int a)
 {
-    while (ScibRegs.SCIFFTX.bit.TXFFST != 0)
-    {
-    }
-    ScibRegs.SCITXBUF = a;
+	// 检查发送FIFO是否为空，如果不是则等待
+	while (ScibRegs.SCIFFTX.bit.TXFFST != 0)
+	{
+	}
+
+	// 将输入的字节发送到SCITXBUF中
+	ScibRegs.SCITXBUF = a;
 }
 
-// 发送数据包
-
-// 发字符串
+// 输入一个字符串，通过串口scib发送
 void scib_msg(char *msg)
 {
-    int i;
-    i = 0;
-    while (msg[i] != '\0')
-    {
-        scib_xmit(msg[i]);
-        i++;
-    }
+	int i;
+	i = 0;
+	// 使用while循环遍历整个字符串，直到遇到字符串结束标志'\0'
+	while (msg[i] != '\0')
+	{
+		scib_xmit(msg[i]); // 逐个字符发送
+
+		i++;
+	}
 }
 
-// Initalize the SCI FIFO
+// 初始化 SCI FIFO
 void scib_fifo_init()
 {
-    ScibRegs.SCIFFTX.bit.SCIRST = 1;   // FIFO复位
-    ScibRegs.SCIFFTX.bit.SCIFFENA = 1; // 使能FIFO
-    // ScibRegs.SCIFFTX.bit.TXFFINTCLR = 1;  // 清除发送FIFO中断标志位
-    ScibRegs.SCIFFTX.bit.TXFFIENA = 0; // 使能发送FIFO中断
-    ScibRegs.SCIFFTX.bit.TXFFIL = 0;   // 发送FIFO中断级别
+	ScibRegs.SCIFFTX.bit.SCIRST = 1;   // FIFO复位
+	ScibRegs.SCIFFTX.bit.SCIFFENA = 1; // 使能FIFO
 
-    // SciaRegs.SCIFFRX.all=0x0028;
-    ScibRegs.SCIFFRX.bit.RXFFIENA = 1; // 使能接收FIFO中断
-    ScibRegs.SCIFFRX.bit.RXFFIL = 15;  // 接收FIFO中断级别
+	ScibRegs.SCIFFRX.bit.RXFFIENA = 1; // 使能接收FIFO中断
+	ScibRegs.SCIFFRX.bit.RXFFIL = 15;  // 接收FIFO中断级别
 
-    ScibRegs.SCIFFCT.all = 0x00; // FIFO传送延时为0
+	ScibRegs.SCIFFCT.all = 0x00; // FIFO传送延时为0
 
-    ScibRegs.SCICTL1.bit.SWRESET = 1; // 重启SCIB
+	ScibRegs.SCICTL1.bit.SWRESET = 1; // 重启SCIB
 
-    ScibRegs.SCIFFTX.bit.TXFIFOXRESET = 1; // 重新使能发送FIFO的操作
-    ScibRegs.SCIFFRX.bit.RXFIFORESET = 1;  // 重新使能接收FIFO的操作
-
-    // ScibRegs.SCIFFRX.all=0x204f;
-    // ScibRegs.SCIFFCT.all=0x0;
+	ScibRegs.SCIFFTX.bit.TXFIFOXRESET = 1; // 重新使能发送FIFO的操作
+	ScibRegs.SCIFFRX.bit.RXFIFORESET = 1;  // 重新使能接收FIFO的操作
 }
 
+// 初始化I2C
 void I2CA_Init(void)
 {
-    // Initialize I2C
-    I2caRegs.I2CSAR = 0x001A; // Slave address（从设备） - EEPROM control code
+	// Initialize I2C
+	I2caRegs.I2CSAR = 0x001A; // 从设备地址 - EEPROM控制码
 
-#if (CPU_FRQ_150MHZ)          // Default - For 150MHz SYSCLKOUT
-    I2caRegs.I2CPSC.all = 14; // Prescaler - need 7-12 Mhz on module clk (150/15 = 10MHz)
+#if (CPU_FRQ_150MHZ)		  // 默认为150MHz SYSCLKOUT
+	I2caRegs.I2CPSC.all = 14; // 预分频器 - 模块时钟需要在7-12MHz之间 (150/15 = 10MHz)
 #endif
-#if (CPU_FRQ_100MHZ)         // For 100 MHz SYSCLKOUT
-    I2caRegs.I2CPSC.all = 9; // Prescaler - need 7-12 Mhz on module clk (100/10 = 10MHz)
+#if (CPU_FRQ_100MHZ)		 // 设为100 MHz SYSCLKOUT
+	I2caRegs.I2CPSC.all = 9; // 预分频器 - 模块时钟需要在7-12MHz之间 (100/10 = 10MHz)
 #endif
 
-    I2caRegs.I2CCLKL = 100;     // NOTE: must be non zero
-    I2caRegs.I2CCLKH = 100;     // NOTE: must be non zero
-    I2caRegs.I2CIER.all = 0x24; // Enable SCD & ARDY interrupts
+	I2caRegs.I2CCLKL = 100;		// NOTE: must be non zero
+	I2caRegs.I2CCLKH = 100;		// NOTE: must be non zero
+	I2caRegs.I2CIER.all = 0x24; // 使能SCD & ARDY中断
 
-    //   I2caRegs.I2CMDR.all = 0x0020;	// Take I2C out of reset
-    I2caRegs.I2CMDR.all = 0x0420; // Take I2C out of reset		//zq
-                                  // Stop I2C when suspended
+	//   I2caRegs.I2CMDR.all = 0x0020;	// Take I2C out of reset
+	I2caRegs.I2CMDR.all = 0x0420; // Take I2C out of reset
+								  // Stop I2C when suspended
 
-    I2caRegs.I2CFFTX.all = 0x6000; // Enable FIFO mode and TXFIFO
-    I2caRegs.I2CFFRX.all = 0x2040; // Enable RXFIFO, clear RXFFINT,
+	I2caRegs.I2CFFTX.all = 0x6000; // 使能FIFO模式和TXFIFO
+	I2caRegs.I2CFFRX.all = 0x2040; // 使能RXFIFO，清除RXFFINT
 
-    return;
+	return;
 }
 
+// AIC23音频编解码器寄存器写入的函数，通过设置I2C传输参数，实现了对寄存器的读写操作。
 Uint16 AIC23Write(int Address, int Data)
 {
-    if (I2caRegs.I2CMDR.bit.STP == 1)
-    {
-        return I2C_STP_NOT_READY_ERROR;
-    }
+	// 判断当前I2C总线是否处于空闲状态，如果不是，则返回I2C_BUS_BUSY_ERROR
+	if (I2caRegs.I2CMDR.bit.STP == 1)
+	{
+		return I2C_STP_NOT_READY_ERROR;
+	}
 
-    // Setup slave address
-    I2caRegs.I2CSAR = 0x1A;
+	// 设置从机地址
+	I2caRegs.I2CSAR = 0x1A;
 
-    // Check if bus busy
-    if (I2caRegs.I2CSTR.bit.BB == 1)
-    {
-        return I2C_BUS_BUSY_ERROR;
-    }
+	// 如果当前I2C总线正在发送或接收数据，则返回I2C_STP_NOT_READY_ERROR
+	if (I2caRegs.I2CSTR.bit.BB == 1)
+	{
+		return I2C_BUS_BUSY_ERROR;
+	}
 
-    // Setup number of bytes to send
-    // MsgBuffer + Address
-    I2caRegs.I2CCNT = 2;
-    I2caRegs.I2CDXR = Address;
-    I2caRegs.I2CDXR = Data;
-    // Send start as master transmitter
-    I2caRegs.I2CMDR.all = 0x6E20;
-    return I2C_SUCCESS;
+	// 如果当前I2C总线正在发送或接收数据，则返回I2C_STP_NOT_READY_ERROR
+	I2caRegs.I2CCNT = 2; // 设置需要发送的字节数，此处为2个字节
+	I2caRegs.I2CDXR = Address;
+	I2caRegs.I2CDXR = Data;
+	// 发送启动信号并设置工作模式为主机发送模式
+	I2caRegs.I2CMDR.all = 0x6E20;
+
+	// 返回I2C传输成功的标志
+	return I2C_SUCCESS;
 }
 
 void Delay(int time)
 {
-    int i, j, k = 0;
-    for (i = 0; i < time; i++)
-        for (j = 0; j < 1024; j++)
-            k++;
-}
-
-void delay(Uint32 k)
-{
-    while (k--)
-        ;
+	int i, j, k = 0;			   // 定义循环变量i、j以及累加器k，初始化k为0
+	for (i = 0; i < time; i++)	   // 外层循环，循环次数为time
+		for (j = 0; j < 1024; j++) // 内层循环，循环次数为1024
+			k++;				   // 累加器k自增1
 }
 
 // 计算CRC值
 unsigned char crc8(unsigned char *buf, int len)
 {
-    unsigned char crc = 0;
-    int i = 0;
-    int j = 0;
-    for (i = 0; i < len; i++) // 循环处理每一个字节数据
-    {
-        crc ^= buf[i];          // 异或数据和CRC
-        for (j = 0; j < 8; ++j) // CRC按位移动处理
-        {
-            if (crc & 0x80) // 检查最高位是否为1
-            {
-                crc = ((crc << 1) ^ POLY); // 若为1，则左移一位后异或生成多项式
-            }
-            else
-            {
-                crc <<= 1; // 否则左移一位
-            }
-        }
-    }
-    return crc;
-}
-// 串口发送中断
-//__interrupt void scibTxFifoIsr(void)
-//{
-////	msg = "\n\nDSP Send: ";
-////	scib_msg(msg);
-////	Uint16 i;
-////	for(i=0; i< 8; i++)
-////	{
-////	   ScibRegs.SCITXBUF=sdataB[i];     // Send data
-////	}
-//
-//	//ScibRegs.SCIFFTX.bit.TXFFINTCLR=1;  // Clear SCI Interrupt flag
-//	PieCtrlRegs.PIEACK.all|=0x100;      // Issue PIE ACK
-//	EINT;
-//}
-
-interrupt void ISRMcbspSend(void)
-{
-    EINT;
-    int temp1;
-
-    temp1 = McbspaRegs.DRR1.all;
-//    temp2=McbspaRegs.DRR2.all;
-
-    McbspaRegs.DXR1.all = temp1; // 放音
-//    McbspaRegs.DXR2.all = temp2;
-    //	unsigned char data[2] = {(temp1 >> 8), temp1};   //输入数据
-    //	unsigned char crc = crc8(data, sizeof(data));  //计算CRC校验值
-    //	sdata[0]=BAOTOU;
-    //	sdata[1]=data[0];
-    //	sdata[2]=data[1];
-    //	sdata[3]=crc;
-    //	sdata[4]=BAOWEI;
-    //	Uint16 cnt;
-    //	for( cnt=0;cnt<5;cnt++)
-    //	{
-    //		scib_xmit(sdata[cnt]);
-    //	}
-    scib_xmit(temp1 >> 8);
-    scib_xmit(temp1);
-    PieCtrlRegs.PIEACK.all = 0x0020;
-    //	PieCtrlRegs.PIEIFR6.bit.INTx5 = 0;
-    //	ERTM;
-}
-
-__interrupt void scibRxFifoIsr(void)
-{
-    Uint16 i;
-    // while(ScibRegs.SCIFFRX.bit.RXFFST !=1)// wait for XRDY =1 for empty state
-
-    for (i = 0; i < 8; i++)
-    {
-        rdataB[i] = ScibRegs.SCIRXBUF.all;
-    }
-    if (rdataB[0] == 0xFF)
-    {
-        PieCtrlRegs.PIEIER6.bit.INTx5 = 1; // Enable PIE Group 6, INT 5
-    }
-    else if (rdataB[0] == 0xFE)
-    {
-        PieCtrlRegs.PIEIER6.bit.INTx5 = 0; // Enable PIE Group 6, INT 5
-    }
-    else
-    	;
-//    msg = "\n\nDSP Receive: ";
-//    scib_msg(msg);
-//    scib_msg(rdataB);
-
-//    ScibRegs.SCIFFTX.bit.TXFFINTCLR = 1;
-    // SciaRegs.SCIFFRX.bit.RXFFOVRCLR=1;  // Clear Overflow flag
-    ScibRegs.SCIFFRX.bit.RXFFINTCLR = 1; // Clear Interrupt flag
-
-    PieCtrlRegs.PIEACK.all |= 0x100; // Issue PIE ack
+	unsigned char crc = 0;
+	int i = 0;
+	int j = 0;
+	for (i = 0; i < len; i++) // 循环处理每一个字节数据
+	{
+		crc ^= buf[i];			// 异或数据和CRC
+		for (j = 0; j < 8; ++j) // CRC按位移动处理
+		{
+			if (crc & 0x80) // 检查最高位是否为1
+			{
+				crc = ((crc << 1) ^ POLY); // 若为1，则左移一位后异或生成多项式
+			}
+			else
+			{
+				crc <<= 1; // 否则左移一位
+			}
+		}
+	}
+	return crc; // 返回计算的crc值
 }
 
 //===========================================================================
