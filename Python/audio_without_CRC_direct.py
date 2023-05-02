@@ -41,6 +41,7 @@ time.sleep(0.1)
 ser.close()
 
 wave_file.writeframes(Data[1:])
+# wave_file.writeframes(Data)
 
 # 关闭WAV文件和串口
 wave_file.close()
