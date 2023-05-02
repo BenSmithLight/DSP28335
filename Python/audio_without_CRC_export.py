@@ -30,7 +30,7 @@ data = []
 # 循环读取并写入数据，直到超过2秒
 while True:
     end = time.time()
-    if end - start > 2:
+    if end - start > 5:
         break
     # 如果有可读数据，就读取并追加到列表中
     if ser.inWaiting():
