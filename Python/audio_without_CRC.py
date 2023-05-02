@@ -26,13 +26,13 @@ start = time.time()
 # 读取并写入数据
 while True:
     end = time.time()
-    if end - start > 5:
+    if end - start > 3:
         break
     data = ser.read(ser.inWaiting())
     Data = Data + data
 
 with open('origin_data.txt', 'w') as file:
-    print(Data, file=file)
+    print(Data.hex(), file=file)
 
 ser.write(ed_signal)
 time.sleep(0.1)
@@ -40,7 +40,7 @@ ser.write(st_signal)
 time.sleep(0.1)
 ser.close()
 
-wave_file.writeframes(Data)
+wave_file.writeframes(Data[1:])
 
 # 关闭WAV文件和串口
 wave_file.close()

@@ -48,17 +48,17 @@ ser.close()
 data = b''.join(data)
 
 # 将二进制数据转换为整数列表，每个整数占两个字节，使用小端字节序
-data = struct.unpack('<' + 'h' * (len(data) // sample_width), data)
+# data = struct.unpack('<' + 'h' * (len(data) // sample_width), data)
 
-# 使用with语句打开原始数据文件，并写入整数列表，使用空格分隔
-with open('origin_data.txt', 'w') as file:
-    for num in data:
-        file.write(str(num) + ' ')
+# # 使用with语句打开原始数据文件，并写入整数列表，使用空格分隔
+# with open('origin_data.txt', 'w') as file:
+#     for num in data:
+#         file.write(str(num) + ' ')
 
-# 使用with语句打开原始数据文件，并从中读取整数列表，使用空格分隔
-with open('origin_data.txt', 'r') as file:
-    # 使用split方法将字符串分割为列表，并使用map方法将字符串转换为整数
-    data = list(map(int, file.read().split()))
+# # 使用with语句打开原始数据文件，并从中读取整数列表，使用空格分隔
+# with open('origin_data.txt', 'r') as file:
+#     # 使用split方法将字符串分割为列表，并使用map方法将字符串转换为整数
+#     data = list(map(int, file.read().split()))
 
 # 使用with语句打开WAV文件，并设置参数和写入音频数据
 with wave.open('test.wav', 'wb') as wave_file:
@@ -66,7 +66,7 @@ with wave.open('test.wav', 'wb') as wave_file:
     wave_file.setsampwidth(sample_width)
     wave_file.setframerate(frame_rate)
     # 将整数列表转换为二进制数据，每个整数占两个字节，使用小端字节序
-    data = struct.pack('<' + 'h' * len(data), *data)
+    # data = struct.pack('<' + 'h' * len(data), *data)
     wave_file.writeframes(data[1:])
 
 print('Finished')

@@ -27,7 +27,7 @@ void scib_xmit(int a);
 void scib_msg(char *msg);
 __interrupt void scibRxFifoIsr(void);
 unsigned char crc8(unsigned char *buf, int len);
-//__interrupt void scibTxFifoIsr(void);
+
 
 char sdata[5];    // Send data for SCI-B
 char rdataB[8] ;    // Received data for SCI-B
@@ -56,47 +56,41 @@ void main(void)
    InitPieVectTable();
 
    SCIStdioInit();
-//   SCIPuts("\r\n ============Test Start===========.\r\n", -1);
-//   SCIPuts("Welcome to TL28335 Audio Mic In Demo application.\r\n\r\n", -1);
 
    I2CA_Init();
 
-	AIC23Write(0x00,0x00);
-	Delay(100);
-	AIC23Write(0x02,0x00);
-	Delay(100);
-	AIC23Write(0x04,0x7f);
-	Delay(100);
-	AIC23Write(0x06,0x7f);
-	Delay(100);
-	AIC23Write(0x08,0x14);
-	Delay(100);
-	AIC23Write(0x0A,0x00);
-	Delay(100);
-	AIC23Write(0x0C,0x00);
-	Delay(100);
-	AIC23Write(0x0E,0x43);
-	Delay(100);
-	AIC23Write(0x10,0x23);
-	Delay(100);
-	AIC23Write(0x12,0x01);
-	Delay(100);		//AIC23Init
+	AIC23Write(0x00, 0x00);
+    Delay(100);
+    AIC23Write(0x02, 0x00);
+    Delay(100);
+    AIC23Write(0x04, 0x60);
+    Delay(100);
+    AIC23Write(0x06, 0x60);
+    Delay(100);
+    AIC23Write(0x08, 0xF5);
+    Delay(100);
+    AIC23Write(0x0A, 0x00);
+    Delay(100);
+    AIC23Write(0x0C, 0x00);
+    Delay(100);
+    AIC23Write(0x0E, 0x43);
+    Delay(100);
+    AIC23Write(0x10, 0x23);
+    Delay(100);
+    AIC23Write(0x12, 0x01);
+    Delay(100); // AIC23Init
 
     InitMcbspa();          // Initalize the Mcbsp-A
 
     EALLOW;	// This is needed to write to EALLOW protected registers
 	PieVectTable.MRINTA = &ISRMcbspSend;
 	PieVectTable.SCIRXINTB = &scibRxFifoIsr;
-	//PieVectTable.SCITXINTB = &scibTxFifoIsr;
+
 	EDIS;   // This is needed to disable write to EALLOW protected registers
 	 //串口初始化
 	scib_fifo_init();	   // Initialize the SCI FIFO
 	scib_echoback_init();  // Initalize SCI for echoback
-	msg = "\r\nWelcome to TL28335 SCIB Demo application.\n\0";
-	scib_msg(msg);
 
-	msg = "\r\nYou will enter a character, and the DSP will echo it back! \n\0";
-	scib_msg(msg);//发送
 	ScibRegs.SCIFFRX.bit.RXFFOVRCLR=1;//清除标志位
 
 	 Uint16 i;
@@ -142,11 +136,8 @@ __interrupt void scibRxFifoIsr(void)
 		{
 			PieCtrlRegs.PIEIER6.bit.INTx5=0;     // Enable PIE Group 6, INT 5
 		}
-		msg = "\n\nDSP Receive: ";
-		scib_msg(msg);
-		scib_msg(rdataB);
 
-	ScibRegs.SCIFFTX.bit.TXFFINTCLR=1;
+	//ScibRegs.SCIFFTX.bit.TXFFINTCLR=1;
 	//SciaRegs.SCIFFRX.bit.RXFFOVRCLR=1;  // Clear Overflow flag
 	ScibRegs.SCIFFRX.bit.RXFFINTCLR=1;  // Clear Interrupt flag
 
@@ -186,23 +177,23 @@ void scib_echoback_init()
     // Note: Clocks were turned on to the Scib 外部
     // in the InitSysCtrl() function
 
- 	ScibRegs.SCICCR.all =0x0007;   // 1 stop bit,  No loopback
+    ScibRegs.SCICCR.all = 0x0007;  // 1 stop bit,  No loopback
                                    // No parity,8 char bits,
                                    // async mode, idle-line protocol
-	ScibRegs.SCICTL1.all =0x0003;  // enable TX, RX, internal SCICLK,
+    ScibRegs.SCICTL1.all = 0x0003; // enable TX, RX, internal SCICLK,
                                    // Disable RX ERR, SLEEP, TXWAKE
-	ScibRegs.SCICTL2.all =0x0003;
-	ScibRegs.SCICTL2.bit.TXINTENA =1;
-	ScibRegs.SCICTL2.bit.RXBKINTENA =1;
-	#if (CPU_FRQ_150MHZ)
-	      ScibRegs.SCIHBAUD    =0x0000;  // 115200 baud @LSPCLK = 37.5MHz.（37500000/（8*115200）-1）
-	      ScibRegs.SCILBAUD    =0x0028;
-	#endif
-	#if (CPU_FRQ_100MHZ)
-      ScibRegs.SCIHBAUD    =0x0000;  // 115200 baud @LSPCLK = 20MHz.
-      ScibRegs.SCILBAUD    =0x0015;
-	#endif
-	ScibRegs.SCICTL1.all =0x0023;  // Relinquish SCI from Reset
+    ScibRegs.SCICTL2.all = 0x0003;
+    ScibRegs.SCICTL2.bit.TXINTENA = 1;
+    ScibRegs.SCICTL2.bit.RXBKINTENA = 1;
+#if (CPU_FRQ_150MHZ)
+    ScibRegs.SCIHBAUD = 0x0000; // 115200 baud @LSPCLK = 37.5MHz.（37500000/（8*115200）-1）
+    ScibRegs.SCILBAUD = 0x0028;
+#endif
+#if (CPU_FRQ_100MHZ)
+    ScibRegs.SCIHBAUD = 0x0000; // 115200 baud @LSPCLK = 20MHz.
+    ScibRegs.SCILBAUD = 0x0015;
+#endif
+    ScibRegs.SCICTL1.all = 0x0023; // Relinquish SCI from Reset
 }
 
 // Transmit a character from the SCI
